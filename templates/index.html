@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>🎬 Movie Database</title>
+    <style>
+        body {
+            font-family: Arial;
+            padding: 20px;
+            background: #fafafa;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 90%;
+        }
+
+        th,
+        td {
+            padding: 10px;
+            border: 1px solid #ccc;
+        }
+
+        th {
+            background-color: #eee;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🎬 Movie Database</h1>
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Title</th>
+            <th>Year</th>
+            <th>Genre</th>
+            <th>Rating</th>
+            <th>Description</th>
+        </tr>
+        {% for m in movies %}
+        <tr>
+            <td>{{ m[0] }}</td>
+            <td>{{ m[1] }}</td>
+            <td>{{ m[2] }}</td>
+            <td>{{ m[3] }}</td>
+            <td>{{ m[4] }}</td>
+            <td>{{ m[5] }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+
+</html>
