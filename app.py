@@ -1,4 +1,4 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, request
 import mysql.connector
 
 # --- Load Secrets ---
@@ -14,7 +14,6 @@ MYSQL_PASSWORD = secrets.get("PASSWORD")
 
 app = Flask(__name__)
 
-# --- Database Config ---
 db_config = {
     'host': 'localhost',
     'user': 'root',
@@ -22,21 +21,27 @@ db_config = {
     'database': 'movie_db'
 }
 
-
-# --- Helper: Get Database Connection ---
 def get_db_connection():
     return mysql.connector.connect(**db_config)
 
 
-# --- Home Page: Show All Movies ---
 @app.route('/')
 def index():
     try:
+        page = int(request.args.get('page', 1))
+        per_page = 10
+        offset = (page - 1) * per_page
+
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # Join movies, directors, genres, and actors
-        cursor.execute("""
+        # Count total movies
+        cursor.execute("SELECT COUNT(*) AS total FROM movies;")
+        total_movies = cursor.fetchone()['total']
+        total_pages = (total_movies + per_page - 1) // per_page
+
+        # Get paginated movies
+        cursor.execute(f"""
             SELECT 
                 m.movie_id,
                 m.title,
@@ -56,14 +61,19 @@ def index():
             LEFT JOIN actors a ON ma.actor_id = a.actor_id
             GROUP BY m.movie_id
             ORDER BY m.rating DESC
-            LIMIT 50;
-        """)
+            LIMIT %s OFFSET %s;
+        """, (per_page, offset))
 
         movies = cursor.fetchall()
         cursor.close()
         conn.close()
 
-        return render_template('index.html', movies=movies)
+        return render_template(
+            'index.html',
+            movies=movies,
+            page=page,
+            total_pages=total_pages
+        )
 
     except Exception as e:
         return f"Database error: {e}"
