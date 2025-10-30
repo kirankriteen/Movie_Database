@@ -1,55 +1,78 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <title>🎬 Movie Database</title>
     <style>
         body {
-            font-family: Arial;
+            font-family: Arial, sans-serif;
             padding: 20px;
             background: #fafafa;
         }
-
+        h1 {
+            text-align: center;
+        }
         table {
             border-collapse: collapse;
-            width: 90%;
+            width: 95%;
+            margin: 0 auto;
+            background: #fff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
-
-        th,
-        td {
+        th, td {
             padding: 10px;
-            border: 1px solid #ccc;
+            border: 1px solid #ddd;
+            text-align: left;
+            vertical-align: top;
         }
-
         th {
-            background-color: #eee;
+            background-color: #f0f0f0;
+        }
+        img {
+            width: 80px;
+            border-radius: 4px;
+        }
+        .small {
+            font-size: 0.9em;
+            color: #666;
         }
     </style>
 </head>
-
 <body>
     <h1>🎬 Movie Database</h1>
+
     <table>
         <tr>
-            <th>ID</th>
+            <th>Poster</th>
             <th>Title</th>
             <th>Year</th>
-            <th>Genre</th>
+            <th>Language</th>
+            <th>Director</th>
+            <th>Genres</th>
+            <th>Actors</th>
             <th>Rating</th>
             <th>Description</th>
         </tr>
+
         {% for m in movies %}
         <tr>
-            <td>{{ m[0] }}</td>
-            <td>{{ m[1] }}</td>
-            <td>{{ m[2] }}</td>
-            <td>{{ m[3] }}</td>
-            <td>{{ m[4] }}</td>
-            <td>{{ m[5] }}</td>
+            <td>
+                {% if m.poster_url %}
+                    <img src="{{ m.poster_url }}" alt="{{ m.title }}">
+                {% else %}
+                    <span>No image</span>
+                {% endif %}
+            </td>
+            <td><a href="/movie/{{ m.movie_id }}"><strong>{{ m.title }}</strong></a></td>
+            <td>{{ m.year or '—' }}</td>
+            <td>{{ m.language or '—' }}</td>
+            <td>{{ m.director_name or 'Unknown' }}</td>
+            <td>{{ m.genres or '—' }}</td>
+            <td class="small">{{ m.actors or '—' }}</td>
+            <td>⭐ {{ "%.1f"|format(m.rating) }}</td>
+            <td class="small">{{ m.description[:200] }}{% if m.description|length > 200 %}...{% endif %}</td>
         </tr>
         {% endfor %}
     </table>
 </body>
-
 </html>
