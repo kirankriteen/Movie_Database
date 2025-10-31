@@ -595,18 +595,23 @@ def send_mail():
     conn = mysql.connector.connect(**db_config)
     cursor = conn.cursor(dictionary=True)
     cursor.execute("""
-        SELECT 
-            m.title, 
-            m.year, 
-            m.language, 
-            m.rating, 
-            m.poster_url, 
-            d.name AS director_name
-        FROM movies m
-        LEFT JOIN directors d ON m.director_id = d.director_id
-        ORDER BY RAND()
-        LIMIT 10
+        SELECT *
+        FROM (
+            SELECT 
+                m.title, 
+                m.year, 
+                m.language, 
+                m.rating, 
+                m.poster_url, 
+                d.name AS director_name
+            FROM movies m
+            LEFT JOIN directors d ON m.director_id = d.director_id
+            ORDER BY RAND()
+            LIMIT 10
+        ) AS random_movies
+        ORDER BY rating DESC
     """)
+
     movies = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -614,7 +619,7 @@ def send_mail():
     # --- Compose HTML email ---
     html = """
     <div style="font-family:Arial, sans-serif; color:#333;">
-        <h2 style="text-align:center; color:#007bff;">🎬 10 Random Movies from Our Database</h2>
+        <h2 style="text-align:center; color:#007bff;">🎬 10 Movies from Our Database</h2>
         <table border="1" cellspacing="0" cellpadding="8" style="width:100%; border-collapse:collapse; margin-top:15px;">
             <thead style="background-color:#f4f4f4;">
                 <tr>
@@ -655,7 +660,7 @@ def send_mail():
     sender_display = formataddr(("Movie Database 🎬", sender_email))  # 👈 Display name
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"🎬 10 Random Movies from Our Database – {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    msg["Subject"] = f"🎬 10 Movies from Our Database – {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     msg["From"] = sender_display   # 👈 Use display name here
     msg["To"] = email
     msg.attach(MIMEText(html, "html"))
@@ -676,7 +681,54 @@ def send_mail():
         print(f"[ERROR] {e}")
         return jsonify({"message": f"❌ Failed to send email: {str(e)}"}), 500
 
+@app.route("/api/movies", methods=["GET"])
+def api_all_movies():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT m.movie_id, m.title, m.year, m.language, m.rating,
+                   d.name AS director,
+                   GROUP_CONCAT(DISTINCT g.name SEPARATOR ', ') AS genres,
+                   GROUP_CONCAT(DISTINCT a.name SEPARATOR ', ') AS actors
+            FROM movies m
+            LEFT JOIN directors d ON m.director_id = d.director_id
+            LEFT JOIN movie_genres mg ON m.movie_id = mg.movie_id
+            LEFT JOIN genres g ON mg.genre_id = g.genre_id
+            LEFT JOIN movie_actors ma ON m.movie_id = ma.movie_id
+            LEFT JOIN actors a ON ma.actor_id = a.actor_id
+            GROUP BY m.movie_id
+            LIMIT 50
+        """)
+        movies = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify(movies)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/search", methods=["GET"])
+def api_search():
+    title = request.args.get("title", "")
+    if not title:
+        return jsonify({"error": "Missing title parameter"}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT m.movie_id, m.title, m.year, m.language, m.rating,
+               d.name AS director
+        FROM movies m
+        LEFT JOIN directors d ON m.director_id = d.director_id
+        WHERE m.title LIKE %s
+        LIMIT 10
+    """, (f"%{title}%",))
+    movies = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return jsonify(movies)
 
 
 if __name__ == '__main__':
     app.run(debug=True)
+    # app.run(host="0.0.0.0", port=5000, debug=True)
