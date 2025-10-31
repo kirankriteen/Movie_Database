@@ -728,6 +728,77 @@ def api_search():
     conn.close()
     return jsonify(movies)
 
+@app.route("/filter_movies", methods=["POST"])
+def filter_movies():
+    data = request.get_json()
+    title = data.get("title", "").strip()
+    year = data.get("year")
+    language = data.get("language", "").strip()
+    director = data.get("director", "").strip()
+    genres = data.get("genres", [])
+    actors = data.get("actors", [])
+
+    api_url = f"https://api.themoviedb.org/3/discover/movie?api_key={API_KEY}&language=en-US&page=1"
+
+    if year:
+        api_url += f"&primary_release_year={year}"
+    if language:
+        api_url += f"&with_original_language={language}"
+    if genres:
+        # TMDB expects genre IDs, not names — we’ll map later
+        genre_map_url = f"https://api.themoviedb.org/3/genre/movie/list?api_key={API_KEY}&language=en-US"
+        genre_data = requests.get(genre_map_url).json().get("genres", [])
+        genre_map = {g["name"].lower(): g["id"] for g in genre_data}
+        genre_ids = [str(genre_map[g.lower()]) for g in genres if g.lower() in genre_map]
+        if genre_ids:
+            api_url += f"&with_genres={','.join(genre_ids)}"
+
+    # Title filtering (approximation, since TMDB discover doesn’t have direct title match)
+    if title:
+        search_url = f"https://api.themoviedb.org/3/search/movie?api_key={API_KEY}&query={title}&language=en-US&page=1"
+        search_results = requests.get(search_url).json().get("results", [])
+    else:
+        search_results = requests.get(api_url).json().get("results", [])
+
+    # Filter by director or actors using TMDB credits if needed
+    filtered = []
+    for m in search_results[:20]:  # limit 20 to reduce API calls
+        if len(filtered) >= 10:
+            break
+        tmdb_id = m["id"]
+        if director or actors:
+            credits_url = f"https://api.themoviedb.org/3/movie/{tmdb_id}/credits?api_key={API_KEY}"
+            credits = requests.get(credits_url).json()
+            director_match = True
+            actor_match = True
+
+            if director:
+                director_match = any(
+                    c.get("job") == "Director" and director.lower() in c.get("name", "").lower()
+                    for c in credits.get("crew", [])
+                )
+            if actors:
+                actor_names = [a.get("name", "").lower() for a in credits.get("cast", [])]
+                actor_match = all(a.lower() in actor_names for a in actors)
+
+            if not (director_match and actor_match):
+                continue
+
+        filtered.append({
+            "title": m["title"],
+            "year": m.get("release_date", "")[:4] if m.get("release_date") else "—",
+            "language": m.get("original_language", "").upper(),
+            "rating": m.get("vote_average", 0),
+            "poster": f"https://image.tmdb.org/t/p/w500{m['poster_path']}" if m.get("poster_path") else None,
+            "description": m.get("overview", ""),
+        })
+
+    return jsonify(filtered)
+
+@app.route("/filter")
+def filter_page():
+    return render_template("filter.html")
+
 
 if __name__ == '__main__':
     app.run(debug=True)

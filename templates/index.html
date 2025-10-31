@@ -94,6 +94,19 @@
         .pagination a:hover {
             background: #eaeaea;
         }
+
+        .btn-filter {
+            background: #007bff;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            text-decoration: none;
+            transition: 0.2s;
+        }
+
+        .btn-filter:hover {
+            background: #0056b3;
+        }
     </style>
 </head>
 
@@ -109,6 +122,10 @@
         <input type="text" name="q" placeholder="Search by title, director, or actor" value="{{ search }}">
         <button type="submit">Search</button>
     </form>
+    <div style="text-align:center; margin-bottom:20px;">
+        <a href="/filter" class="btn-filter">🎯 Advanced Filter</a>
+    </div>
+
 
     <table>
         <tr>
@@ -179,17 +196,17 @@
     <button id="sendMailBtn">📧 Send Mail</button>
 </body>
 <script>
-document.getElementById("sendMailBtn").addEventListener("click", async () => {
-    const email = prompt("Enter the recipient email address:");
-    if (!email) return;
-    const res = await fetch("/send_mail", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email })
+    document.getElementById("sendMailBtn").addEventListener("click", async () => {
+        const email = prompt("Enter the recipient email address:");
+        if (!email) return;
+        const res = await fetch("/send_mail", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        alert(data.message || "Email sent!");
     });
-    const data = await res.json();
-    alert(data.message || "Email sent!");
-});
 </script>
 
 </html>
