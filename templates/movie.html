@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>{{ movie.title }} - Details</title>
@@ -10,29 +11,35 @@
             margin: 0;
             padding: 20px;
         }
+
         .container {
             max-width: 900px;
             margin: auto;
             background: #fff;
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
+
         .header {
             display: flex;
             gap: 20px;
         }
+
         img.poster {
             width: 250px;
             border-radius: 6px;
         }
+
         .details h1 {
             margin: 0;
         }
+
         .meta {
             color: #666;
             margin-bottom: 10px;
         }
+
         .genres span {
             background: #eee;
             border-radius: 4px;
@@ -40,28 +47,35 @@
             margin-right: 5px;
             font-size: 0.9em;
         }
+
         .rating {
             font-size: 1.2em;
             color: #eab308;
             margin-top: 5px;
         }
+
         .description {
             margin-top: 20px;
             line-height: 1.6;
         }
+
         .section {
             margin-top: 25px;
         }
+
         .actor {
             margin-bottom: 5px;
         }
+
         a {
             color: #007bff;
             text-decoration: none;
         }
+
         a:hover {
             text-decoration: underline;
         }
+
         .back {
             display: inline-block;
             margin-bottom: 15px;
@@ -69,22 +83,40 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <a href="/" class="back">← Back to All Movies</a>
 
         <div class="header">
             {% if movie.poster_url %}
-                <img src="{{ movie.poster_url }}" alt="{{ movie.title }}" class="poster">
+            <img src="{{ movie.poster_url }}" alt="{{ movie.title }}" class="poster">
             {% endif %}
             <div class="details">
                 <h1>{{ movie.title }}</h1>
                 <div class="meta">
-                    {{ movie.year }} • {{ movie.language|upper }} • Directed by {{ movie.director_name or 'Unknown' }}
+                    {% if movie.year %}
+                    <a href="/year/{{ movie.year }}">{{ movie.year }}</a>
+                    {% else %}
+                    —
+                    {% endif %}
+                    •
+                    {% if movie.language %}
+                    <a href="/language/{{ movie.language }}">{{ movie.language|upper }}</a>
+                    {% else %}
+                    —
+                    {% endif %}
+                    •
+                    {% if movie.director_name %}
+                    <a href="/director/{{ movie.director_name }}">{{ movie.director_name }}</a>
+                    {% else %}
+                    Directed by Unknown
+                    {% endif %}
                 </div>
+
                 <div class="genres">
                     {% for g in genres %}
-                        <span>{{ g }}</span>
+                    <a href="/genre/{{ g }}"><span>{{ g }}</span></a>
                     {% endfor %}
                 </div>
                 <div class="rating">⭐ {{ "%.1f"|format(movie.rating) }}</div>
@@ -98,16 +130,18 @@
         <div class="section">
             <h3>Cast</h3>
             {% if actors %}
-                {% for a in actors %}
-                    <div class="actor">
-                        <strong>{{ a.name }}</strong>
-                        {% if a.role %} as <em>{{ a.role }}</em>{% endif %}
-                    </div>
-                {% endfor %}
+            {% for a in actors %}
+            <div class="actor">
+                <strong><a href="/actor/{{ a.name }}">{{ a.name }}</a></strong>
+                {% if a.role %} as <em>{{ a.role }}</em>{% endif %}
+
+            </div>
+            {% endfor %}
             {% else %}
-                <p>No actor information available.</p>
+            <p>No actor information available.</p>
             {% endif %}
         </div>
     </div>
 </body>
+
 </html>
