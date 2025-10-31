@@ -1,7 +1,13 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, jsonify
 import requests
 import mysql.connector
 import math
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import random
+from email.utils import formataddr
+from datetime import datetime
 
 # --- Load Secrets ---
 secrets = {}
@@ -14,6 +20,8 @@ with open("dont.txt", "r") as file:
 
 API_KEY = secrets.get("API_KEY")
 MYSQL_PASSWORD = secrets.get("PASSWORD")
+EMAIL_USER = secrets.get("EMAIL_USER")
+EMAIL_PASS = secrets.get("EMAIL_PASS")
 
 app = Flask(__name__)
 
@@ -574,6 +582,100 @@ def fetch_movie():
     conn.close()
 
     return f"<script>alert('✅ Movie fetched and added successfully!');window.location='/?q={title}';</script>"
+
+@app.route("/send_mail", methods=["POST"])
+def send_mail():
+    data = request.get_json()
+    email = data.get("email")
+
+    if not email:
+        return jsonify({"message": "Email is required"}), 400
+
+    # --- Fetch 10 random movies ---
+    conn = mysql.connector.connect(**db_config)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT 
+            m.title, 
+            m.year, 
+            m.language, 
+            m.rating, 
+            m.poster_url, 
+            d.name AS director_name
+        FROM movies m
+        LEFT JOIN directors d ON m.director_id = d.director_id
+        ORDER BY RAND()
+        LIMIT 10
+    """)
+    movies = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    # --- Compose HTML email ---
+    html = """
+    <div style="font-family:Arial, sans-serif; color:#333;">
+        <h2 style="text-align:center; color:#007bff;">🎬 10 Random Movies from Our Database</h2>
+        <table border="1" cellspacing="0" cellpadding="8" style="width:100%; border-collapse:collapse; margin-top:15px;">
+            <thead style="background-color:#f4f4f4;">
+                <tr>
+                    <th>Poster</th>
+                    <th>Title</th>
+                    <th>Year</th>
+                    <th>Language</th>
+                    <th>Rating ⭐</th>
+                    <th>Director</th>
+                </tr>
+            </thead>
+            <tbody>
+    """
+
+    for m in movies:
+        html += f"""
+        <tr style="text-align:center;">
+            <td>{'<img src="' + m['poster_url'] + '" width="80" style="border-radius:6px;">' if m['poster_url'] else '—'}</td>
+            <td><strong>{m['title']}</strong></td>
+            <td>{m['year'] or '—'}</td>
+            <td>{m['language'].upper() if m['language'] else '—'}</td>
+            <td>{m['rating']:.1f}</td>
+            <td>{m['director_name'] or '—'}</td>
+        </tr>
+        """
+
+    html += """
+            </tbody>
+        </table>
+        <p style="margin-top:20px; text-align:center;">🍿 Enjoy your movie recommendations!<br>
+        <small>Sent by Movie Database – Powered by Flask</small></p>
+    </div>
+    """
+
+    # --- Email details ---
+    sender_email = EMAIL_USER
+    password = EMAIL_PASS
+    sender_display = formataddr(("Movie Database 🎬", sender_email))  # 👈 Display name
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"🎬 10 Random Movies from Our Database – {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    msg["From"] = sender_display   # 👈 Use display name here
+    msg["To"] = email
+    msg.attach(MIMEText(html, "html"))
+
+    # --- Send email ---
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(sender_email, password)
+            server.sendmail(sender_display, email, msg.as_string())
+        return jsonify({"message": f"✅ Email sent successfully to {email}!"})
+
+    except smtplib.SMTPAuthenticationError as e:
+        print(f"[AUTH ERROR] {e}")
+        return jsonify({
+            "message": "❌ Authentication failed: Please check Gmail username or App Password."
+        }), 500
+    except Exception as e:
+        print(f"[ERROR] {e}")
+        return jsonify({"message": f"❌ Failed to send email: {str(e)}"}), 500
+
 
 
 if __name__ == '__main__':

@@ -176,7 +176,20 @@
             {% endif %}
     </div>
 
-
+    <button id="sendMailBtn">📧 Send Mail</button>
 </body>
+<script>
+document.getElementById("sendMailBtn").addEventListener("click", async () => {
+    const email = prompt("Enter the recipient email address:");
+    if (!email) return;
+    const res = await fetch("/send_mail", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+    alert(data.message || "Email sent!");
+});
+</script>
 
 </html>
