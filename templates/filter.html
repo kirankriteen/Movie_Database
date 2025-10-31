@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>🎯 Advanced Movie Filter</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+    <h1>
+        <a href="/">🎬 Movie Database</a> – Advanced Filter
+    </h1>
+
+    <div class="filter-container">
+        <form id="filterForm" onsubmit="return false;">
+            <!-- Title -->
+            <div class="form-group">
+                <label>Title</label>
+                <input type="text" id="filter-title" placeholder="Enter movie title">
+            </div>
+
+            <!-- Year -->
+            <div class="form-group">
+                <label>Year</label>
+                <input type="number" id="filter-year" placeholder="e.g., 2019">
+            </div>
+
+            <!-- Language -->
+            <div class="form-group">
+                <label>Language</label>
+                <input type="text" id="filter-language" placeholder="e.g., en, fr, hi">
+            </div>
+
+            <!-- Director -->
+            <div class="form-group">
+                <label>Director</label>
+                <input type="text" id="filter-director" placeholder="Enter director name">
+            </div>
+
+            <!-- Genres -->
+            <div class="form-group">
+                <label>Genres</label>
+                <div class="tag-input-container" id="genre-tags">
+                    <input type="text" id="genre-input" placeholder="Type genre and press Enter">
+                </div>
+            </div>
+
+            <!-- Actors -->
+            <div class="form-group">
+                <label>Actors</label>
+                <div class="tag-input-container" id="actor-tags">
+                    <input type="text" id="actor-input" placeholder="Type actor and press Enter">
+                </div>
+            </div>
+
+            <div class="btn-container">
+                <button type="button" id="apply-filter">🔍 Apply Filter</button>
+                <a href="/" class="btn-secondary">⬅ Back to Home</a>
+            </div>
+        </form>
+    </div>
+
+    <div id="filtered-results" class="results-container">
+        <h2>🎬 Filtered Results</h2>
+        <div id="filtered-list"></div>
+    </div>
+
+    <script src="{{ url_for('static', filename='filter.js') }}"></script>
+</body>
+</html>
