@@ -145,26 +145,36 @@
         </tr>
         {% endfor %}
     </table>
+    {% if not_found %}
+    <div style="text-align:center; margin-top:20px;">
+        <p>No movies found for "{{ search }}"</p>
+        <form action="/fetch_movie" method="get">
+            <input type="hidden" name="title" value="{{ search }}">
+            <button type="submit">🔍 Fetch Movie</button>
+        </form>
+    </div>
+    {% endif %}
 
-<!-- Pagination -->
-<div class="pagination">
-    {% if total_pages > 1 %}
+
+    <!-- Pagination -->
+    <div class="pagination">
+        {% if total_pages > 1 %}
         {% if page > 1 %}
-            <a href="{{ base_url }}?page={{ page - 1 }}{% if search %}&q={{ search }}{% endif %}">« Prev</a>
+        <a href="{{ base_url }}?page={{ page - 1 }}{% if search %}&q={{ search }}{% endif %}">« Prev</a>
         {% endif %}
 
         {% for p in range(1, total_pages + 1) %}
-            <a href="{{ base_url }}?page={{ p }}{% if search %}&q={{ search }}{% endif %}"
-               class="{% if p == page %}active{% endif %}">
-                {{ p }}
-            </a>
+        <a href="{{ base_url }}?page={{ p }}{% if search %}&q={{ search }}{% endif %}"
+            class="{% if p == page %}active{% endif %}">
+            {{ p }}
+        </a>
         {% endfor %}
 
-        {% if page < total_pages %}
-            <a href="{{ base_url }}?page={{ page + 1 }}{% if search %}&q={{ search }}{% endif %}">Next »</a>
-        {% endif %}
-    {% endif %}
-</div>
+        {% if page < total_pages %} <a
+            href="{{ base_url }}?page={{ page + 1 }}{% if search %}&q={{ search }}{% endif %}">Next »</a>
+            {% endif %}
+            {% endif %}
+    </div>
 
 
 </body>

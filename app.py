@@ -1,5 +1,7 @@
 from flask import Flask, render_template, request
+import requests
 import mysql.connector
+import math
 
 # --- Load Secrets ---
 secrets = {}
@@ -10,6 +12,7 @@ with open("dont.txt", "r") as file:
             key, value = line.split("=", 1)
             secrets[key] = value
 
+API_KEY = secrets.get("API_KEY")
 MYSQL_PASSWORD = secrets.get("PASSWORD")
 
 app = Flask(__name__)
@@ -26,81 +29,88 @@ def get_db_connection():
     return mysql.connector.connect(**db_config)
 
 
-@app.route('/')
+# --- Home / Search Route ---
+@app.route("/")
 def index():
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
+    search = request.args.get("q", "").strip()
+    page = request.args.get("page", 1, type=int)
+    per_page = 10
+    offset = (page - 1) * per_page
 
-        # --- Pagination Setup ---
-        page = request.args.get('page', 1, type=int)
-        per_page = 10
-        offset = (page - 1) * per_page
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
 
-        # --- Search Handling ---
-        search = request.args.get('q', '').strip()
-
-        # Base query
-        base_query = """
+    if search:
+        # --- Search movies by title, actor, or director ---
+        query = f"""
+            SELECT DISTINCT m.movie_id, m.title, m.year, m.rating, m.description,
+                            m.poster_url, m.language,
+                            d.name AS director_name,
+                            GROUP_CONCAT(DISTINCT g.name SEPARATOR ', ') AS genres,
+                            GROUP_CONCAT(DISTINCT a.name SEPARATOR ', ') AS actors
             FROM movies m
             LEFT JOIN directors d ON m.director_id = d.director_id
             LEFT JOIN movie_genres mg ON m.movie_id = mg.movie_id
             LEFT JOIN genres g ON mg.genre_id = g.genre_id
             LEFT JOIN movie_actors ma ON m.movie_id = ma.movie_id
             LEFT JOIN actors a ON ma.actor_id = a.actor_id
-        """
-
-        # If searching, add WHERE clause
-        if search:
-            where_clause = "WHERE m.title LIKE %s OR d.name LIKE %s OR a.name LIKE %s"
-            params = (f"%{search}%", f"%{search}%", f"%{search}%")
-        else:
-            where_clause = ""
-            params = ()
-
-        # --- Count total results for pagination ---
-        count_query = f"SELECT COUNT(DISTINCT m.movie_id) {base_query} {where_clause}"
-        cursor.execute(count_query, params)
-        total_movies = cursor.fetchone()['COUNT(DISTINCT m.movie_id)']
-
-        total_pages = (total_movies + per_page - 1) // per_page
-
-        # --- Fetch paginated data ---
-        movie_query = f"""
-            SELECT 
-                m.movie_id,
-                m.title,
-                m.year,
-                m.rating,
-                m.description,
-                m.poster_url,
-                m.language,
-                d.name AS director_name,
-                GROUP_CONCAT(DISTINCT g.name SEPARATOR ', ') AS genres,
-                GROUP_CONCAT(DISTINCT a.name SEPARATOR ', ') AS actors
-            {base_query}
-            {where_clause}
+            WHERE m.title LIKE %s OR d.name LIKE %s OR a.name LIKE %s
             GROUP BY m.movie_id
             ORDER BY m.rating DESC
-            LIMIT %s OFFSET %s;
+            LIMIT %s OFFSET %s
         """
-        cursor.execute(movie_query, params + (per_page, offset))
+        cursor.execute(query, (f"%{search}%", f"%{search}%", f"%{search}%", per_page, offset))
         movies = cursor.fetchall()
 
-        cursor.close()
-        conn.close()
+        # --- Get total count for pagination ---
+        count_query = """
+            SELECT COUNT(DISTINCT m.movie_id) AS total
+            FROM movies m
+            LEFT JOIN directors d ON m.director_id = d.director_id
+            LEFT JOIN movie_actors ma ON m.movie_id = ma.movie_id
+            LEFT JOIN actors a ON ma.actor_id = a.actor_id
+            WHERE m.title LIKE %s OR d.name LIKE %s OR a.name LIKE %s
+        """
+        cursor.execute(count_query, (f"%{search}%", f"%{search}%", f"%{search}%"))
+        total_movies = cursor.fetchone()["total"]
+    else:
+        # --- Default: show all movies ---
+        cursor.execute(f"""
+            SELECT m.movie_id, m.title, m.year, m.rating, m.description,
+                   m.poster_url, m.language,
+                   d.name AS director_name,
+                   GROUP_CONCAT(DISTINCT g.name SEPARATOR ', ') AS genres,
+                   GROUP_CONCAT(DISTINCT a.name SEPARATOR ', ') AS actors
+            FROM movies m
+            LEFT JOIN directors d ON m.director_id = d.director_id
+            LEFT JOIN movie_genres mg ON m.movie_id = mg.movie_id
+            LEFT JOIN genres g ON mg.genre_id = g.genre_id
+            LEFT JOIN movie_actors ma ON m.movie_id = ma.movie_id
+            LEFT JOIN actors a ON ma.actor_id = a.actor_id
+            GROUP BY m.movie_id
+            ORDER BY m.rating DESC
+            LIMIT %s OFFSET %s
+        """, (per_page, offset))
+        movies = cursor.fetchall()
 
-        # --- Pass everything to template ---
-        return render_template(
-            'index.html',
-            movies=movies,
-            page=page,
-            total_pages=total_pages,
-            search=search
-        )
+        cursor.execute("SELECT COUNT(*) AS total FROM movies")
+        total_movies = cursor.fetchone()["total"]
 
-    except Exception as e:
-        return f"Database error: {e}"
+    total_pages = math.ceil(total_movies / per_page)
+
+    cursor.close()
+    conn.close()
+
+    return render_template(
+        "index.html",
+        movies=movies,
+        page=page,
+        total_pages=total_pages,
+        search=search,
+        genre_name=None,
+        base_url="/",
+        not_found=(search != "" and len(movies) == 0)
+    )
 
 
 
@@ -471,6 +481,99 @@ def year_page(year):
     except Exception as e:
         return f"Database error: {e}"
 
+# --- Fetch Movie from TMDB ---
+@app.route("/fetch_movie")
+def fetch_movie():
+    title = request.args.get("title", "").strip()
+    if not title:
+        return "No title provided."
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # --- Check if movie already exists ---
+    cursor.execute("SELECT * FROM movies WHERE title LIKE %s", (title,))
+    if cursor.fetchone():
+        cursor.close()
+        conn.close()
+        return f"<script>alert('Movie already exists in database!');window.location='/?q={title}';</script>"
+
+    # --- Search movie in TMDB ---
+    search_url = f"https://api.themoviedb.org/3/search/movie?api_key={API_KEY}&query={title}&language=en-US"
+    res = requests.get(search_url).json()
+    results = res.get("results", [])
+    if not results:
+        return f"<script>alert('❌ This movie does not exist in TMDB.');window.location='/';</script>"
+
+    movie_data = results[0]
+    tmdb_id = movie_data["id"]
+
+    # --- Fetch detailed movie info ---
+    details_url = f"https://api.themoviedb.org/3/movie/{tmdb_id}?api_key={API_KEY}&language=en-US"
+    credits_url = f"https://api.themoviedb.org/3/movie/{tmdb_id}/credits?api_key={API_KEY}"
+    details = requests.get(details_url).json()
+    credits = requests.get(credits_url).json()
+
+    # --- Insert director ---
+    director_id = None
+    for crew in credits.get("crew", []):
+        if crew.get("job") == "Director":
+            dname = crew.get("name")
+            cursor.execute("SELECT director_id FROM directors WHERE name=%s", (dname,))
+            d = cursor.fetchone()
+            if d:
+                director_id = d["director_id"]
+            else:
+                cursor.execute("INSERT INTO directors (name) VALUES (%s)", (dname,))
+                director_id = cursor.lastrowid
+            break
+
+    # --- Insert movie ---
+    cursor.execute("""
+        INSERT INTO movies (tmdb_id, title, year, rating, description, poster_url, runtime, director_id, language)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """, (
+        tmdb_id,
+        details.get("title"),
+        int(details.get("release_date", "0")[:4]) if details.get("release_date") else None,
+        details.get("vote_average", 0.0),
+        details.get("overview", ""),
+        f"https://image.tmdb.org/t/p/w500{details.get('poster_path')}" if details.get("poster_path") else None,
+        details.get("runtime"),
+        director_id,
+        details.get("original_language")
+    ))
+    movie_id = cursor.lastrowid
+
+    # --- Insert genres ---
+    for g in details.get("genres", []):
+        cursor.execute("SELECT genre_id FROM genres WHERE name=%s", (g["name"],))
+        row = cursor.fetchone()
+        if not row:
+            cursor.execute("INSERT INTO genres (name) VALUES (%s)", (g["name"],))
+            genre_id = cursor.lastrowid
+        else:
+            genre_id = row["genre_id"]
+        cursor.execute("INSERT IGNORE INTO movie_genres (movie_id, genre_id) VALUES (%s, %s)", (movie_id, genre_id))
+
+    # --- Insert top 5 actors ---
+    for actor in credits.get("cast", [])[:5]:
+        aname = actor["name"]
+        cursor.execute("SELECT actor_id FROM actors WHERE name=%s", (aname,))
+        a = cursor.fetchone()
+        if a:
+            actor_id = a["actor_id"]
+        else:
+            cursor.execute("INSERT INTO actors (name) VALUES (%s)", (aname,))
+            actor_id = cursor.lastrowid
+        cursor.execute("INSERT IGNORE INTO movie_actors (movie_id, actor_id, role) VALUES (%s, %s, %s)",
+                       (movie_id, actor_id, actor.get("character")))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return f"<script>alert('✅ Movie fetched and added successfully!');window.location='/?q={title}';</script>"
 
 
 if __name__ == '__main__':
